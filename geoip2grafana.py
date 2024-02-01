@@ -25,16 +25,12 @@ def locate(target):
                 .replace("'", "").split("name=")[1].split(",")[0]
             gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
 
+            ipt = {}
+            for value in config()["to_collect"]:
+                ipt[value] = target[f'{value}']
+
             formatted = {
-                "ipt":  {
-                    "SRC": target['SRC'],
-                    "SPT": target["SPT"],
-                    "PROTO": target["PROTO"],
-                    "OUT": target["OUT"],
-                    "IN": target["IN"],
-                    "DST": target["DST"],
-                    "DPT": target["DPT"]
-                },
+                "ipt":  ipt,
                 "geoip": {
                     "location": {
                         "time_zone": dict_raw["timezone"],
@@ -71,8 +67,8 @@ p = select.poll()
 p.register(f.stdout)
 ips = {}
 
-config = Conson()
-if not os.path.exists(os.path.join(os.getcwd(), "config.json")):
+config = Conson(cfile="geoip2grafana_config.json")
+if not os.path.exists(os.path.join(os.getcwd(), "geoip2grafana_config.json")):
 
     logfile = os.path.join("/var/log/", "geoip2grafana.log")
     temp = os.path.join(r"/tmp", "geoip2grafana.temp")
@@ -80,13 +76,13 @@ if not os.path.exists(os.path.join(os.getcwd(), "config.json")):
 
     config.create("logfile", logfile)
     config.create("temp", temp)
+    config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
+    config.create("timedelta", "hours=72")
     config.create("token", token)
     config.save()
 
 else:
     config.load()
-
-to_collect = ["IN", "SRC", "OUT", "SPT", "PROTO", "IN", "DST", "DPT"]
 
 if not os.path.exists(config()['logfile']):
     subprocess.run(["touch", f"{config()['logfile']}"])
@@ -105,9 +101,10 @@ with open(config()['temp'], "r+") as temp_file:
 
         to_delete = []
         current_conn = {}
+        unit, value = config()["timedelta"].split("=")
 
         for ip, ts in ips.items():
-            if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(hours=72):
+            if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
                 to_delete.append(ip)
 
         for ip in to_delete:
@@ -119,12 +116,12 @@ with open(config()['temp'], "r+") as temp_file:
             if "[iptables]" in line:
                 for data in line.split()[6:]:
                     kv = data.split("=")
-                    if len(kv) == 2 and kv[0] in to_collect:
+                    if len(kv) == 2 and kv[0] in config()["to_collect"]:
                         current_conn[kv[0]] = kv[1]
-                    elif len(kv) == 1 and kv[0] in to_collect:
+                    elif len(kv) == 1 and kv[0] in config()["to_collect"]:
                         current_conn[kv[0]] = ""
 
-                for item in to_collect:
+                for item in config()["to_collect"]:
                     if item not in list(current_conn):
                         current_conn[item] = ""
 

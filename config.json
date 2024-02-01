@@ -1,5 +1,15 @@
 {
     "logfile": "/var/log/geoip2grafana.log",
     "temp": "/tmp/gip2g.temp",
+    "to_collect": [
+        "IN",
+        "SRC",
+        "OUT",
+        "SPT",
+        "PROTO",
+        "DST",
+        "DPT"
+    ],
+    "timedelta": "hours=72",
     "token": "ipinfoToken"
 }
