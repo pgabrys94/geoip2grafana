@@ -40,19 +40,23 @@ Promtail job:
         __path__: /var/log/geoip2grafana.log
     pipeline_stages:
       - json:
-          expressions:
-            geoip_country_name: geoip.country.names.en
-            geoip_city_name: geoip.city.en
-            geoip_geohash: geoip.location.geohash
-      - labels:
-          geoip_country_name: geoip_country_name
-          geoip_city_name: geoip_city_name
-          geoip_geohash: geoip_geohash
-          src_port: ipt.SPT
-          dst_port: ipt.DPT
-          protocol: ipt.PROTO
-      - output:
-          source: message
+        expressions:
+          geoip_country_name: geoip.country.names.en
+          geoip_city_name: geoip.city.en
+          geoip_geohash: geoip.location.geohash
+          geoip_asn: geoip.organization.AS
+          geoip_org: geoip.organization.name
+    - labels:
+        geoip_country_name: geoip_country_name
+        geoip_city_name: geoip_city_name
+        geoip_geohash: geoip_geohash
+        geoip_asn: geoip_asn
+        geoip_org: geoip_org
+        src_port: ipt.SPT
+        dst_port: ipt.DPT
+        protocol: ipt.PROTO
+    - output:
+        source: message
 
   By default, script will collect from iptables journald log entries following items:
 

@@ -19,15 +19,15 @@ def locate(target):
 
             for info in raw:
                 info = info.replace('"', "").strip(",").split(":")
-                dict_raw[info[0].strip()] = info[1].strip()
+                dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
 
             country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
                 .replace("'", "").split("name=")[1].split(",")[0]
             gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
 
             ipt = {}
-            for value in config()["to_collect"]:
-                ipt[value] = target[f'{value}']
+            for v in config()["to_collect"]:
+                ipt[v] = target[f'{v}']
 
             formatted = {
                 "ipt":  ipt,
@@ -47,6 +47,10 @@ def locate(target):
                     },
                     "city": {
                         "en": dict_raw["city"]
+                    },
+                    "organization": {
+                        "AS": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else "",
+                        "name": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else ""
                     }
                 },
                 "ISODATE": datetime.now().isoformat()
