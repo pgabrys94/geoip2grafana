@@ -6,6 +6,11 @@ Dependencies:
 
     pip install pycountry, geohash2, conson
 
+Usage:
+
+    nohup python3 geoip2grafana.py &
+(or you can create .service file)
+
 You can set paths to log directory and tempfile directory in geoip2grafana_config.json file. You HAVE TO add your own ipinfo.io token to this config.
 Also, IP address by default will be queried in API every 72 hours (.temp file stores dictionary of IP:timestamp), you can change that value in config using datetime timedelta syntax:
 
