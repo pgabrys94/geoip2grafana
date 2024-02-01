@@ -1,6 +1,6 @@
 {
     "logfile": "/var/log/geoip2grafana.log",
-    "temp": "/tmp/gip2g.temp",
+    "temp": "/tmp/geoip2grafana.temp",
     "to_collect": [
         "IN",
         "SRC",
