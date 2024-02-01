@@ -1,0 +1,5 @@
+{
+    "logfile": "/var/log/geoip2grafana.log",
+    "temp": "/tmp/gip2g.temp",
+    "token": "ipinfoToken"
+}
