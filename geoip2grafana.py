@@ -69,13 +69,12 @@ args = ['journalctl', '--lines', '0', '--follow', '--grep', '[iptables]']
 f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
 p.register(f.stdout)
-ips = {}
 
 config = Conson(cfile="geoip2grafana_config.json")
-if not os.path.exists(os.path.join(os.getcwd(), "geoip2grafana_config.json")):
+if not os.path.exists(config.file):
 
     logfile = os.path.join("/var/log/", "geoip2grafana.log")
-    temp = os.path.join(r"/tmp", "geoip2grafana.temp")
+    temp = os.path.join(r"/tmp/", "geoip2grafana.temp")
     token = "ipinfoToken"
 
     config.create("logfile", logfile)
@@ -88,51 +87,46 @@ if not os.path.exists(os.path.join(os.getcwd(), "geoip2grafana_config.json")):
 else:
     config.load()
 
+ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
+if not os.path.exists(ips.file):
+    ips.save()
+else:
+    ips.load()
+
 if not os.path.exists(config()['logfile']):
     subprocess.run(["touch", f"{config()['logfile']}"])
 if not os.path.exists(config()['temp']):
     subprocess.run(["touch", f"{config()['temp']}"])
 
-with open(config()['temp'], "r+") as temp_file:
-    try:
-        ips = json.load(temp_file)
-    except json.JSONDecodeError:
-        print("error loading IP list temporary file")
-        temp_file.seek(0)
-        temp_file.truncate()
+while True:
 
-    while True:
+    to_delete = []
+    current_conn = {}
+    unit, value = config()["timedelta"].split("=")
 
-        to_delete = []
-        current_conn = {}
-        unit, value = config()["timedelta"].split("=")
+    for ip, ts in ips().items():
+        if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
+            to_delete.append(ip)
 
-        for ip, ts in ips.items():
-            if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
-                to_delete.append(ip)
+    for ip in to_delete:
+        ips.dispose(ip)
 
-        for ip in to_delete:
-            ips.pop(ip)
+    if p.poll():
+        line = f.stdout.readline().decode()
 
-        if p.poll():
-            line = f.stdout.readline().decode()
+        if "[iptables]" in line:
+            for data in line.split()[6:]:
+                kv = data.split("=")
+                if len(kv) == 2 and kv[0] in config()["to_collect"]:
+                    current_conn[kv[0]] = kv[1]
+                elif len(kv) == 1 and kv[0] in config()["to_collect"]:
+                    current_conn[kv[0]] = ""
 
-            if "[iptables]" in line:
-                for data in line.split()[6:]:
-                    kv = data.split("=")
-                    if len(kv) == 2 and kv[0] in config()["to_collect"]:
-                        current_conn[kv[0]] = kv[1]
-                    elif len(kv) == 1 and kv[0] in config()["to_collect"]:
-                        current_conn[kv[0]] = ""
+            for item in config()["to_collect"]:
+                if item not in list(current_conn):
+                    current_conn[item] = ""
 
-                for item in config()["to_collect"]:
-                    if item not in list(current_conn):
-                        current_conn[item] = ""
-
-                if current_conn["SRC"] not in list(ips):
-                    ips[current_conn["SRC"]] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    temp_file.seek(0)
-                    temp_file.truncate()
-                    json.dump(ips, temp_file, indent=4)
-                    temp_file.flush()
-                    locate(current_conn)
+            if current_conn["SRC"] not in list(ips()):
+                ips()[current_conn["SRC"]] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                ips.save()
+                locate(current_conn)
