@@ -127,6 +127,6 @@ while True:
                     current_conn[item] = ""
 
             if current_conn["SRC"] not in list(ips()):
-                ips()[current_conn["SRC"]] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                ips.create(current_conn["SRC"], datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 ips.save()
                 locate(current_conn)
