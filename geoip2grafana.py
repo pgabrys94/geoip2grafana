@@ -5,6 +5,7 @@ import os
 import pycountry
 import geohash2
 import json
+import sys
 from conson import Conson
 from datetime import datetime, timedelta
 
@@ -65,6 +66,29 @@ def locate(target):
         print(target)
 
 
+def conf_change():
+    current_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
+    if current_mod_time > mod_time:
+        try:
+            test = Conson(cfile="geoip2grafana_config.json")
+            test.load()
+
+            if test() == config():
+                pass
+            elif test() != config():
+                print("INFO: Config changed, loading new data...")
+                for original_key, original_value in config().items():
+                    if original_value != test()[original_key]:
+                        print(f"[{original_key}] CHANGING FROM:\n{original_value.strip()}\n"
+                              f"TO\n{test()[original_key]}\n")
+                config.load()
+        except Exception as err:
+            print("WARNING: config file has been changed, but it's not properly formatted.")
+            print(f"ERROR: {err}")
+            print("Restoring previous settings...")
+            config.save()
+
+
 args = ['journalctl', '--lines', '0', '--follow', '--grep', '[iptables]']
 f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
@@ -84,7 +108,11 @@ if not os.path.exists(config.file):
     config.create("token", token)
     config.save()
 
+    print("Please update your info in config file.")
+    input("Press enter to exit...")
+    sys.exit()
 else:
+
     config.load()
 
 ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
@@ -100,9 +128,12 @@ if not os.path.exists(config()['temp']):
 
 while True:
 
+    conf_change()
+
     to_delete = []
     current_conn = {}
     unit, value = config()["timedelta"].split("=")
+    mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
 
     for ip, ts in ips().items():
         if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
