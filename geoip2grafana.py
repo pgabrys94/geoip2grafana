@@ -66,7 +66,7 @@ def locate(target):
         print(target)
 
 
-def conf_change():
+def conf_change(mod_time):
     current_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
     if current_mod_time > mod_time:
         try:
@@ -128,12 +128,11 @@ if not os.path.exists(config()['temp']):
 
 while True:
 
-    conf_change()
+    conf_change(os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json")))
 
     to_delete = []
     current_conn = {}
     unit, value = config()["timedelta"].split("=")
-    mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
 
     for ip, ts in ips().items():
         if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
