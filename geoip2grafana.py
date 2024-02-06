@@ -73,13 +73,19 @@ def conf_change():
             test = Conson(cfile="geoip2grafana_config.json")
             test.load()
 
+            time_values = ['minutes', 'hours', 'days', 'weeks']
+            if test()["timedelta"].split("=")[0] not in time_values:
+                raise Exception("Invalid timedelta. Must be 'minutes', 'hours', 'days' or 'weeks'.")
+
             if test() == config():
                 pass
             elif test() != config():
                 for original_key, original_value in config().items():
                     if original_value != test()[original_key]:
-                        print(f"INFO: {original_key}: {original_value.strip()} >>> {test()[original_key]}\n")
+                        print(f"INFO: {original_key}: {original_value.strip()} >>> {test()[original_key]}")
+                print("\n")
                 config.load()
+
         except Exception as err:
             print("WARNING: config file has been changed, but it's not properly formatted.")
             print(f"ERROR: {err}")
