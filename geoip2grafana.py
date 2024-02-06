@@ -11,6 +11,12 @@ from datetime import datetime, timedelta
 
 
 def locate(target):
+    """
+    Function for sending API request, enriching iptables data with received geodata
+     and appending query results to logfile.
+    :param target: dictionary containing requested iptables data
+    :return: None
+    """
     try:
         if target['SRC'] != "0.0.0.0":
             raw = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}")\
@@ -67,6 +73,10 @@ def locate(target):
 
 
 def conf_change():
+    """
+    Function looking for changes in configuration file.
+    :return:
+    """
     current_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
     if current_mod_time > mod_time:
         try:
