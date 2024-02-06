@@ -76,11 +76,9 @@ def conf_change():
             if test() == config():
                 pass
             elif test() != config():
-                print("INFO: Config changed, loading new data...")
                 for original_key, original_value in config().items():
                     if original_value != test()[original_key]:
-                        print(f"[{original_key}] CHANGING FROM:\n{original_value.strip()}\n"
-                              f"TO\n{test()[original_key]}\n")
+                        print(f"INFO: {original_key}: {original_value.strip()} >>> {test()[original_key]}\n")
                 config.load()
         except Exception as err:
             print("WARNING: config file has been changed, but it's not properly formatted.")
