@@ -20,54 +20,53 @@ def locate(target):
     """
     try:
 
-        if target['SRC'] != "0.0.0.0":
-            raw = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}")\
-                .text[1:-1].strip().split("\n")
+        raw = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}")\
+            .text[1:-1].strip().split("\n")
 
-            dict_raw = {}
+        dict_raw = {}
 
-            for info in raw:
-                info = info.replace('"', "").strip(",").split(":")
-                dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
+        for info in raw:
+            info = info.replace('"', "").strip(",").split(":")
+            dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
 
-            country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
-                .replace("'", "").split("name=")[1].split(",")[0]
-            gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
+        country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
+            .replace("'", "").split("name=")[1].split(",")[0]
+        gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
 
-            ipt = {}
-            for v in config()["to_collect"]:
-                ipt[v] = target[f'{v}']
+        ipt = {}
+        for v in config()["to_collect"]:
+            ipt[v] = target[f'{v}']
 
-            formatted = {
-                "ipt":  ipt,
-                "geoip": {
-                    "location": {
-                        "time_zone": dict_raw["timezone"],
-                        "latitude": dict_raw["loc"].split(",")[0],
-                        "longitude": dict_raw["loc"].split(",")[1],
-                        "geohash": gh
+        formatted = {
+            "ipt":  ipt,
+            "geoip": {
+                "location": {
+                    "time_zone": dict_raw["timezone"],
+                    "latitude": dict_raw["loc"].split(",")[0],
+                    "longitude": dict_raw["loc"].split(",")[1],
+                    "geohash": gh
 
-                    },
-                    "country": {
-                        "names": {
-                            "en": country
-                        },
-                        "iso_code": dict_raw["country"]
-                    },
-                    "city": {
-                        "en": dict_raw["city"]
-                    },
-                    "organization": {
-                        "AS": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else "",
-                        "name": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else ""
-                    }
                 },
-                "ISODATE": datetime.now().isoformat()
-            }
+                "country": {
+                    "names": {
+                        "en": country
+                    },
+                    "iso_code": dict_raw["country"]
+                },
+                "city": {
+                    "en": dict_raw["city"]
+                },
+                "organization": {
+                    "AS": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else "",
+                    "name": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else ""
+                }
+            },
+            "ISODATE": datetime.now().isoformat()
+        }
 
-            with open(config()['logfile'], "a") as log:
-                json.dump(formatted, log, separators=(",", ":"))
-                log.write("\n")
+        with open(config()['logfile'], "a") as log:
+            json.dump(formatted, log, separators=(",", ":"))
+            log.write("\n")
     except Exception as err:
         print(line.split()[6:])
         print(err)
