@@ -11,5 +11,9 @@
         "DPT"
     ],
     "timedelta": "hours=72",
+    "excluded_IP": [
+        "127.0.0.0/8",
+        "0.0.0.0"
+    ],
     "token": "ipinfoToken"
 }
