@@ -6,6 +6,7 @@ import pycountry
 import geohash2
 import json
 import sys
+import ipaddress
 from conson import Conson
 from datetime import datetime, timedelta
 
@@ -18,6 +19,7 @@ def locate(target):
     :return: None
     """
     try:
+
         if target['SRC'] != "0.0.0.0":
             raw = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}")\
                 .text[1:-1].strip().split("\n")
@@ -103,6 +105,31 @@ def conf_change():
             config.save()
 
 
+def excluded(ip_net_list, address):
+    """
+    Comparing logged IP with list of excluded IP/networks.
+    :param ip_net_list: String -> List of IP addresses and networks from config file.
+    :param address: String -> Logged IP address
+    :return: Boolean -> True if logged IP matches IP or network from config file, False otherwise.
+    """
+
+    xnets = []
+    xips = []
+
+    for addr in ip_net_list:
+        xnets.append(addr) if "/" in addr else xips.append(addr)
+
+    if address in xips:
+        return True
+    else:
+        for network in xnets:
+            net = ipaddress.ip_network(network, strict=False)
+            ipaddr = ipaddress.ip_address(address)
+            if ipaddr in net:
+                return True
+    return False
+
+
 args = ['journalctl', '--lines', '0', '--follow', '--grep', '[iptables]']
 f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
@@ -119,6 +146,7 @@ if not os.path.exists(config.file):
     config.create("temp", temp)
     config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
     config.create("timedelta", "hours=72")
+    config.create("excluded_IP", ["127.0.0.0/8", "0.0.0.0"])
     config.create("token", token)
     config.save()
 
@@ -170,7 +198,7 @@ while True:
                 if item not in list(current_conn):
                     current_conn[item] = ""
 
-            if current_conn["SRC"] not in list(ips()):
+            if current_conn["SRC"] not in list(ips()) and not excluded(config()["excluded_IP"], current_conn["SRC"]):
                 ips.create(current_conn["SRC"], datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 ips.save()
                 locate(current_conn)
