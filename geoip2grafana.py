@@ -208,5 +208,5 @@ while True:
                 if item not in list(current_conn):
                     current_conn[item] = ""
 
-            if current_conn["SRC"] not in list(ips()) and not excluded(config()["excluded_IP"], current_conn["SRC"]):
+            if not excluded(config()["excluded_IP"], current_conn["SRC"]):
                 locate(current_conn)
