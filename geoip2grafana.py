@@ -29,7 +29,7 @@ def locate(target):
             ips.save()
             raw = req
         else:
-            raw = ips()[f"{target["SRC"]}"][1]
+            raw = ips()[{target['SRC']}][1]
 
         dict_raw = {}
 
@@ -43,7 +43,7 @@ def locate(target):
 
         ipt = {}
         for v in config()["to_collect"]:
-            ipt[v] = target[f'{v}']
+            ipt[v] = target[v]
 
         formatted = {
             "ipt":  ipt,
@@ -171,7 +171,7 @@ else:
     ips.load()
     for ip_address, values in ips().items():
         if not isinstance(values, list):
-            ips.dispose(f"{ip_address}")
+            ips.dispose(ip_address)
 
 if not os.path.exists(config()['logfile']):
     subprocess.run(["touch", f"{config()['logfile']}"])
