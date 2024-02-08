@@ -20,8 +20,16 @@ def locate(target):
     """
     try:
 
-        raw = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}")\
-            .text[1:-1].strip().split("\n")
+        if target['SRC'] not in list(ips()):
+
+            req = requests.get(f"https://ipinfo.io/{target['SRC']}?token={config()['token']}") \
+                      .text[1:-1].strip().split("\n")
+
+            ips.create(current_conn["SRC"], [datetime.now().strftime('%Y-%m-%d %H:%M:%S'), req])
+            ips.save()
+            raw = req
+        else:
+            raw = ips()[f"{target["SRC"]}"][1]
 
         dict_raw = {}
 
@@ -161,6 +169,9 @@ if not os.path.exists(ips.file):
     ips.save()
 else:
     ips.load()
+    for ip_address, values in ips().items():
+        if not isinstance(values, list):
+            ips.dispose(f"{ip_address}")
 
 if not os.path.exists(config()['logfile']):
     subprocess.run(["touch", f"{config()['logfile']}"])
@@ -176,7 +187,7 @@ while True:
     unit, value = config()["timedelta"].split("=")
 
     for ip, ts in ips().items():
-        if (datetime.now() - datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
+        if (datetime.now() - datetime.strptime(ts[0], '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
             to_delete.append(ip)
 
     for ip in to_delete:
@@ -198,6 +209,4 @@ while True:
                     current_conn[item] = ""
 
             if current_conn["SRC"] not in list(ips()) and not excluded(config()["excluded_IP"], current_conn["SRC"]):
-                ips.create(current_conn["SRC"], datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                ips.save()
                 locate(current_conn)
