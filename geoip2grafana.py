@@ -29,7 +29,7 @@ def locate(target):
             ips.save()
             raw = req
         else:
-            raw = ips()[{target['SRC']}][1]
+            raw = ips()[target['SRC']][1]
 
         dict_raw = {}
 
