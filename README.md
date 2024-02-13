@@ -20,7 +20,7 @@ Also, IP address by default will be queried in API every 72 hours (.temp file st
     weeks=float
 
 
-Requires iptables journald logging (credits to bossm8):
+Requires iptables journald logging:
 
      iptables -N IP_LOGGING
      iptables -A IP_LOGGING -s 10.0.0.0/8,172.16.0.0/12,192.168.178.0/24,127.0.0.1/32 -j RETURN    # put any private ip pool you do NOT want to log
