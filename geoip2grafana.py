@@ -179,14 +179,28 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         print(err)
 
 
+def mod_time(up=False):
+    global json_mod_time
+    if up:
+        json_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
+        return True
+    else:
+        return os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
+
+
+def tag_pwd():
+    config.veil("influxdb", "db_pwd")
+    config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
+
+
 def conf_change():
     """
     Function looking for changes in configuration file.
     :return:
     """
-    global mod_time
     current_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
-    if current_mod_time > mod_time:
+    reported_mod_time = mod_time()
+    if current_mod_time > reported_mod_time:
         try:
             test = Conson(cfile="geoip2grafana_config.json")
             test.load()
@@ -196,14 +210,22 @@ def conf_change():
                 pass
             elif test()["timedelta"].split("=")[0] not in time_values:
                 raise Exception("Invalid timedelta. Must be 'minutes', 'hours', 'days' or 'weeks'.")
-            elif len(test()["influxdb"]) == 0 or not type(test()["influxdb"]) == dict:
+            elif len(test()["influxdb"]) == 0 or not isinstance(test()["influxdb"], dict):
                 raise Exception("Invalid influxdb parameters.")
             elif test() != config():
                 for original_key, original_value in config().items():
-                    if original_value != test()[original_key]:
-                        print(f"INFO: {original_key}: {original_value.strip()} >>> {test()[original_key]}")
+                    if isinstance(original_value, dict):
+                        for original_subkey, original_subvalue in original_value.items():
+                            if original_subvalue != test()[original_key][original_subkey]:
+                                print(f"INFO: {original_subkey}: {str(original_subvalue).strip()} >>> "
+                                      f"{str(test()[original_key][original_subkey])}")
+                                if original_subkey == "db_pwd":
+                                    tag_pwd()
+                    else:
+                        if original_value != test()[original_key]:
+                            print(f"INFO: {original_key}: {str(original_value).strip()} >>> {test()[original_key]}")
                 print("\n")
-                mod_time = current_mod_time
+                mod_time(True)
                 config.load()
 
         except Exception as err:
@@ -378,7 +400,7 @@ f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
 p.register(f.stdout)
 hostname = socket.gethostname()
-mod_time = None
+json_mod_time = None
 
 config = Conson(cfile="geoip2grafana_config.json")
 if not os.path.exists(config.file):
@@ -402,13 +424,13 @@ if not os.path.exists(config.file):
     input("Press enter to exit...")
     sys.exit()
 else:
-    mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
+    mod_time(True)
     config.load()
     pwd = config()["influxdb"]["db_pwd"]
-    if len(pwd) != 0 or pwd != "PASSWORD" or (pwd[0] != "<" and pwd[-1] != ">"):
-        config.veil("influxdb", "db_pwd")
-        config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
+    if len(pwd) != 0 and pwd != "PASSWORD" and pwd[0] != "<" and pwd[-1] != ">":
+        tag_pwd()
         config.save()
+        mod_time(True)
 
     if config()["influxdb"]["active"]:
         db_way()
