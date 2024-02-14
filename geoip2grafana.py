@@ -29,8 +29,8 @@ def api_req(src):
 
 def enrich(raw_data, target, db_format=False, from_db=False):
     """
-    Function for sending API request, enriching iptables data with received geodata
-     and appending query results to logfile.
+    Function for enriching iptables data with received geodata and appending query results to logfile or inserting
+    them into a database.
     :param target: dictionary containing requested iptables data
     :param raw_data: dictionary containing raw geodata
     :param from_db: boolean -> raw data source format flag
@@ -38,6 +38,10 @@ def enrich(raw_data, target, db_format=False, from_db=False):
     :return: None
     """
     def enrich_for_log():
+        """
+        Enriching for logfile.
+        :return: dictionary
+        """
         enriched = {
             "ipt": ipt,
             "geoip": {
@@ -68,82 +72,100 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         return enriched
 
     def enrich_for_db():
-        print("enrich_for_db")
-        if from_db:
-            print("from DB")
-            latest = list(raw_data.get_points())[-1]
-            fields = {}
-            tags = {}
-            for key, val in latest.items():
-                if key == "time":
-                    continue
-                if isinstance(val, str) and val.isdigit():
-                    fields[key] = int(val)
-                elif isinstance(val, str):
-                    fields[key] = val
-                else:
-                    tags[key] = val
+        """
+        Enriching for database insertion.
+        :return: list -> compatible with database line protocol format
+        """
+        try:
+            if from_db:
+                fields_rw = {}
+                tags_rw = {}
+                for key, val in raw_data.items():
+                    if key in config()["influxdb_tags"]:
+                        if key == "hostname":
+                            tags_rw["hostname"] = hostname
+                        else:
+                            tags_rw[key] = val
+                    else:
+                        fields_rw[key] = val
+                fields_rw.pop("time")   # since "time" is not defined in config as tag, it will be put into "fields"
+                if "SRC" in list(fields_rw):
+                    fields_rw.pop("SRC")
 
-            enriched = [
-                {
-                    "measurement": hostname,
-                    "fields": fields,
-                    "tags": tags
+                enriched_rw = [
+                    {
+                        "measurement": target["SRC"],
+                        "fields": fields_rw,
+                        "tags": tags_rw
+                    }
+                ]
+
+                return enriched_rw
+
+            else:
+                dict_all = {
+                    "country": country,
+                    "hostname": hostname,
+                    "API_req_ts": datetime.now().isoformat(),
+                    "time_zone": dict_raw["timezone"],
+                    "latitude": dict_raw["loc"].split(",")[0],
+                    "longitude": dict_raw["loc"].split(",")[1],
+                    "geohash": gh,
+                    "iso_code": dict_raw["country"],
+                    "city": dict_raw["city"],
+                    "organization": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else "",
+                    "ASN": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else ""
+
                 }
-            ]
+                tags = {}
+                fields = ipt
+                for tag in config()["influxdb_tags"]:   # check desired tags
+                    if tag in config()["to_collect"]:   # check if tag belongs to iptables log data
+                        tags[tag] = ipt[tag]
+                        fields.pop(tag)
+                    else:
+                        if tag in list(dict_all):       # if tag does not belong to ip, check geoip api data and others
+                            tags[tag] = dict_all[tag]
+                            dict_all.pop(tag)
+                        else:                           # if tag is unknown, raise error
+                            raise Exception("Unknown InfluxDB tag {}".format(tag))
 
-            return enriched
+                if "SRC" in list(fields):
+                    fields.pop("SRC")
 
-        else:
-            print("NOT from db")
-            tags = {}
-            fields = ipt
-            for tag in config()["influxdb_tags"]:
-                tags[tag] = ipt[tag]
-                fields.pop(tag)
-            tags['country'] = country
-            tags["API_req_ts"] = datetime.now().isoformat()
-            dict_add = {
-                "time_zone": dict_raw["timezone"],
-                "latitude": dict_raw["loc"].split(",")[0],
-                "longitude": dict_raw["loc"].split(",")[1],
-                "geohash": gh,
-                "iso_code": dict_raw["country"],
-                "city": dict_raw["city"],
-                "organization": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else "",
-                "ASN": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else ""
+                fields.update(dict_all)
 
-            }
-            fields.update(dict_add)
+                enriched = [
+                    {
+                        "measurement": target["SRC"],
+                        "tags": tags,
+                        "fields": fields
+                    }
+                ]
 
-            enriched = [
-                {
-                    "measurement": hostname,
-                    "tags": tags,
-                    "fields": fields
-                }
-            ]
+                return enriched
 
-            return enriched
+        except Exception as e:
+            print(e)
+            sys.exit()
 
     try:
-        print("enrich function")
         dict_raw = {}
 
         if from_db:
-            enrich_for_db()
+            return enrich_for_db()
         else:
-            print("formatting raw api data")
             for info in raw_data:
                 info = info.replace('"', "").strip(",").split(":")
                 dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
-        print("getting country name")
+
+        # acquire country name from ISO code
         country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
             .replace("'", "").split("name=")[1].split(",")[0]
-        print("OK")
-        print("geohash convertion")
+
+        # create geohash from latitude and longitude
         gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
-        print("OK")
+
         ipt = {}
         for v in config()["to_collect"]:
             ipt[v] = target[v]
@@ -151,9 +173,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         return enrich_for_db() if db_format else enrich_for_log()
 
     except Exception as err:
-        breakpoint()
         print(err)
-        print(target)
 
 
 def conf_change():
@@ -192,7 +212,7 @@ def conf_change():
 
 def excluded(ip_net_list, address):
     """
-    Comparing logged IP with list of excluded IP/networks.
+    Comparing logged IP with list of excluded IP/networks in addition to iptables logging rules.
     :param ip_net_list: String -> List of IP addresses and networks from config file.
     :param address: String -> Logged IP address
     :return: Boolean -> True if logged IP matches IP or network from config file, False otherwise.
@@ -216,6 +236,10 @@ def excluded(ip_net_list, address):
 
 
 def retrieve():
+    """
+    Read iptables log entry from journal and pass them for enrichment.
+    :return:
+    """
     current_conn = {}
 
     while True:
@@ -239,6 +263,10 @@ def retrieve():
 
 
 def log_way():
+    """
+    Use logfile as data container - for use with promtail.
+    :return:
+    """
     ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
     if not os.path.exists(ips.file):
         ips.save()
@@ -282,14 +310,20 @@ def log_way():
 
 
 def db_way():
+    """
+    Use InfluxDB database as data container.
+    :return:
+    """
     def db_write(fresh=False):
-        print("writing to db")
+        """
+        Depending on data source, write to db either freshly requested geodata or already existing with new timestamp.
+        :param fresh: boolean -> comparing time difference between now, api request timestamp and timedelta from config.
+        :return:
+        """
         if fresh:
-            print("get fresh info")
             db_client.write_points(enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
         else:
-            print("rewrite")
-            db_client.write_points(enrich(db_query, ipt_data, True, True))
+            db_client.write_points(enrich(newest_data, ipt_data, True, True))
 
     while True:
         try:
@@ -302,23 +336,26 @@ def db_way():
 
             units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
             unit, value = config()['timedelta'].split('=')
-            ret_time = value + units[unit]
+            if value.isdigit() and unit in units:
+                ret_time = value + units[unit]
+            else:
+                raise Exception("Timedelta conversion error")
 
             ipt_data = retrieve()
 
-            query = f"""SELECT * FROM "{hostname}" WHERE time > now() - {ret_time} AND "IP" = '{ipt_data["SRC"]}'"""
+            query = f"""SELECT * FROM "{ipt_data["SRC"]}" WHERE time > now() - {ret_time} ORDER BY time DESC LIMIT 1"""
 
             if ipt_data:
                 db_query = db_client.query(query)
-                if len(list(db_query.get_points())) == 0:
-                    db_write(True)
+
+                if len(list(db_query)) == 0:
+                    db_write(True)  # if query result is empty, write to fresh data to DB
                 else:
                     rewrite = False
-                    for dataset in list(db_query.get_points()):
-                        if (datetime.now() - datetime.strptime(dataset["API_ts"], "%Y-%m-%dT%H:%M:%S.%f")
-                                < timedelta(**{unit: int(value)})):
-                            rewrite = True
-                            break
+                    newest_data = list(db_query.get_points())[0]
+                    if (datetime.now() - datetime.strptime(newest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f")
+                            < timedelta(**{unit: int(value)})):
+                        rewrite = True
                     if rewrite:
                         db_write()
                     else:
@@ -350,7 +387,7 @@ if not os.path.exists(config.file):
     config.create("excluded_IP", ["127.0.0.0/8", "0.0.0.0"])
     config.create("token", token)
     config.create("influxdb", [False, "localhost", 8086, "USERNAME", "PASSWORD", "geoip2grafana"])
-    config.create("influxdb_tags", ["SRC", "DPT", "PROTO"])
+    config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_time", "country"])
     config.save()
 
     print("Please update your info in config file.")
