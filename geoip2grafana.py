@@ -26,6 +26,7 @@ def api_req(src):
         else:
             return api_query
     except Exception as err:
+        print("In function: api_req()")
         print(err)
         sys.exit()
 
@@ -149,6 +150,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                 return enriched
 
         except Exception as e:
+            print("In function: enrich_for_db()")
             print(e)
             sys.exit()
 
@@ -176,6 +178,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         return enrich_for_db() if db_format else enrich_for_log()
 
     except Exception as err:
+        print("In function: enrich()")
         print(err)
 
 
@@ -229,6 +232,7 @@ def conf_change():
                 config.load()
 
         except Exception as err:
+            print("In function: conf_change()")
             print("WARNING: config file has been changed, but it was not properly formatted.")
             print(f"ERROR: {err}")
             print("Restoring previous settings...")
@@ -390,6 +394,7 @@ def db_way():
                         db_write(True)
 
         except Exception as err:
+            print("In function: db_way()")
             print("Error connecting to database:")
             print(err)
             sys.exit()
