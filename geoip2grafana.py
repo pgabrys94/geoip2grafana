@@ -391,7 +391,7 @@ if not os.path.exists(config.file):
     config.create("token", token)
     config.create("influxdb", {"active": False, "db_IP": "localhost", "db_port": 8086, "db_user": "USERNAME",
                                "db_pwd": "PASSWORD", "db_name": "geoip2grafana"})
-    config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_time", "country"])
+    config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_ts", "country"])
     config.save()
 
     print("Please update your info in config file.")
