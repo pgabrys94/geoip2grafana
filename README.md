@@ -4,15 +4,47 @@ Based on bossm8 idea but does not require docker or syslog-ng: https://medium.co
 
 Dependencies:
 
-    pip install pycountry, geohash2, conson
+    pip install pycountry geohash2 conson requests influxdb
 
 Usage:
 
     nohup python3 geoip2grafana.py &
 (or you can create .service file)
 
-You can set paths to log directory and tempfile directory in geoip2grafana_config.json file. You HAVE TO add your own ipinfo.io token to this config.
-Also, IP address by default will be queried in API every 72 hours (.temp file stores dictionary of IP:timestamp), you can change that value in config using datetime timedelta syntax:
+VERSION 2.0:
+
+Now you can use InfluxDB database to store your geolocation data. Compatible with version 1.* of database.
+You need to set database related parameters in configuration file:
+
+    "influxdb": {
+        "active": false,
+        "db_IP": "localhost",
+        "db_port": 8086,
+        "db_user": "USERNAME",
+        "db_pwd": "PASSWORD",
+        "db_name": "geoip2grafana"
+    },
+
+Next, you can set what you want to store as tag. Everything else will be considered as field. You can choose from:
+
+        "country" - full country name,
+        "hostname" - hostname creating measurement (table) entry,
+        "API_req_ts" - API request timestamp (in ISO format)
+        "time_zone" - self explanatory,
+        "latitude"  -   self explanatory,
+        "longitude" - self explanatory,
+        "geohash" - self explanatory,
+        "iso_code" - ISO code of source IP country,
+        "city" - approximate city location of source IP,
+        "organization" - autonomous system owner,
+        "ASN" - autonomous system number.
+
+Additionally, you can use any of iptables items, provided you collected them from journal first.
+
+You can set paths to log directory and tempfile directory in geoip2grafana_config.json file. 
+You HAVE TO add your own ipinfo.io token to this config.
+Also, IP address by default will be queried in API every 72 hours (.temp file stores dictionary of IP:timestamp), 
+you can change that value in config using datetime timedelta syntax:
 
     minutes=float
     hours=float

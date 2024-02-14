@@ -332,10 +332,10 @@ def db_way():
         try:
             conf_change()
 
-            config()["influxdb"][4] = db[4].replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+            config()["influxdb"]["db_pwd"] = db["db_pwd"].replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
 
-            db_pwd = config.unveil(config()["influxdb"][4])
-            db_client = InfluxDBClient(db[1], db[2], db[3], db_pwd, db[5])
+            db_pwd = config.unveil(config()["influxdb"]["db_pwd"])
+            db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], db_pwd, db["db_name"])
 
             units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
             unit, value = config()['timedelta'].split('=')
@@ -389,7 +389,8 @@ if not os.path.exists(config.file):
     config.create("timedelta", "hours=72")
     config.create("excluded_IP", ["127.0.0.0/8", "0.0.0.0"])
     config.create("token", token)
-    config.create("influxdb", [False, "localhost", 8086, "USERNAME", "PASSWORD", "geoip2grafana"])
+    config.create("influxdb", {"active": False, "db_IP": "localhost", "db_port": 8086, "db_user": "USERNAME",
+                               "db_pwd": "PASSWORD", "db_name": "geoip2grafana"})
     config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_time", "country"])
     config.save()
 
@@ -399,16 +400,13 @@ if not os.path.exists(config.file):
 else:
     mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
     config.load()
-    pwd = config()["influxdb"][4]
-    if pwd != "USERNAME" and pwd != "PASSWORD" and pwd[0] != "<" and pwd[-1] != ">":
-        config.veil("influxdb", 4)
-        pwd_tagged = config()["influxdb"][4]
-        config()["influxdb"].pop(4)
-        config()["influxdb"].insert(4, ("<" + pwd_tagged + ">"))
+    pwd = config()["influxdb"]["db_pwd"]
+    if len(pwd) != 0 and pwd != "PASSWORD" and pwd[0] != "<" and pwd[-1] != ">":
+        config()["influxdb"]["dbpwd"] = "<" + config.veil("influxdb", "db_pwd") + ">"
         config.save()
 
 db = config()["influxdb"]
-if db[0]:
+if db["active"]:
     db_way()
 else:
     log_way()
