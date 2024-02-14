@@ -196,7 +196,7 @@ def conf_change():
                 pass
             elif test()["timedelta"].split("=")[0] not in time_values:
                 raise Exception("Invalid timedelta. Must be 'minutes', 'hours', 'days' or 'weeks'.")
-            elif len(test()["influxdb"]) == 0 or not type(test()["influxdb"]) == list:
+            elif len(test()["influxdb"]) == 0 or not type(test()["influxdb"]) == dict:
                 raise Exception("Invalid influxdb parameters.")
             elif test() != config():
                 for original_key, original_value in config().items():
@@ -378,6 +378,7 @@ f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
 p.register(f.stdout)
 hostname = socket.gethostname()
+mod_time = None
 
 config = Conson(cfile="geoip2grafana_config.json")
 if not os.path.exists(config.file):
