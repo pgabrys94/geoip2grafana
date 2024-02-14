@@ -1,3 +1,6 @@
+# geoip2grafana by Pawel Gabrys
+# http://github.com/pawelgabrys/geoip2grafana
+
 import subprocess
 import select
 import requests
