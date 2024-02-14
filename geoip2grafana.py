@@ -207,7 +207,7 @@ def conf_change():
                 config.load()
 
         except Exception as err:
-            print("WARNING: config file has been changed, but it's not properly formatted.")
+            print("WARNING: config file has been changed, but it was not properly formatted.")
             print(f"ERROR: {err}")
             print("Restoring previous settings...")
             config.save()
@@ -332,9 +332,12 @@ def db_way():
         try:
             conf_change()
 
-            db["db_pwd"] = db["db_pwd"].replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+            db = config()["influxdb"]
 
-            clear_pwd = config.unveil(db["db_pwd"])
+            config()["influxdb"]["db_pwd"] = config()["influxdb"]["db_pwd"]\
+                .replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+
+            clear_pwd = config.unveil(config()["influxdb"]["db_pwd"])
             db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
 
             units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
@@ -406,8 +409,7 @@ else:
         config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
         config.save()
 
-db = config()["influxdb"]
-if db["active"]:
-    db_way()
-else:
-    log_way()
+    if config()["influxdb"]["active"]:
+        db_way()
+    else:
+        log_way()
