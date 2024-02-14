@@ -402,7 +402,7 @@ else:
     config.load()
     pwd = config()["influxdb"]["db_pwd"]
     if len(pwd) != 0 and pwd != "PASSWORD" and pwd[0] != "<" and pwd[-1] != ">":
-        config()["influxdb"]["dbpwd"] = "<" + config.veil("influxdb", "db_pwd") + ">"
+        config.veil("influxdb", "db_pwd")
         config.save()
 
 db = config()["influxdb"]
