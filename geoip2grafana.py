@@ -332,10 +332,10 @@ def db_way():
         try:
             conf_change()
 
-            config()["influxdb"]["db_pwd"] = db["db_pwd"].replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+            db["db_pwd"] = db["db_pwd"].replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
 
-            db_pwd = config.unveil(config()["influxdb"]["db_pwd"])
-            db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], db_pwd, db["db_name"])
+            clear_pwd = config.unveil(db["db_pwd"])
+            db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
 
             units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
             unit, value = config()['timedelta'].split('=')
