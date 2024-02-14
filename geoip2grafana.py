@@ -401,12 +401,13 @@ else:
     mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
     config.load()
     pwd = config()["influxdb"]["db_pwd"]
-    if len(pwd) != 0 and pwd != "PASSWORD" and pwd[0] != "<" and pwd[-1] != ">":
+    if len(pwd) != 0 or pwd != "PASSWORD" or pwd[0] != "<" and pwd[-1] != ">":
         config.veil("influxdb", "db_pwd")
+        config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
         config.save()
 
-db = config()["influxdb"]
-if db["active"]:
-    db_way()
-else:
-    log_way()
+    db = config()["influxdb"]
+    if db["active"]:
+        db_way()
+    else:
+        log_way()
