@@ -15,5 +15,21 @@
         "127.0.0.0/8",
         "0.0.0.0"
     ],
-    "token": "ipinfoToken"
+    "token": "ipInfoToken",
+    "influxdb": [
+        false,
+        "localhost",
+        8086,
+        "USERNAME",
+        "PASSWORD",
+        "geoip2grafana"
+    ],
+    "influxdb_tags": [
+        "hostname",
+        "API_req_ts",
+        "DPT",
+        "PROTO",
+        "country"
+    ]
 }
+

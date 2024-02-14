@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys
+# geoip2grafana by Pawel Gabrys, version 2.0
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
