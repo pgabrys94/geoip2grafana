@@ -406,8 +406,8 @@ else:
         config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
         config.save()
 
-    db = config()["influxdb"]
-    if db["active"]:
-        db_way()
-    else:
-        log_way()
+db = config()["influxdb"]
+if db["active"]:
+    db_way()
+else:
+    log_way()
