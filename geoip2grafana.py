@@ -58,27 +58,29 @@ def enrich(raw_data, target, db_format=False, from_db=False):
             "ipt": ipt,
             "geoip": {
                 "location": {
-                    "time_zone": dict_raw["timezone"],
-                    "latitude": dict_raw["loc"].split(",")[0],
-                    "longitude": dict_raw["loc"].split(",")[1],
-                    "geohash": gh
+                    "time_zone": raw_data["time_zone"] if db_format else dict_raw["timezone"],
+                    "latitude": raw_data["latitude"] if db_format else dict_raw["loc"].split(",")[0],
+                    "longitude": raw_data["longitude"] if db_format else dict_raw["loc"].split(",")[1],
+                    "geohash": raw_data["geohash"] if db_format else gh
 
                 },
                 "country": {
                     "names": {
-                        "en": country
+                        "en": raw_data["country"] if db_format else country
                     },
-                    "iso_code": dict_raw["country"]
+                    "iso_code": raw_data["iso_code"] if db_format else dict_raw["country"]
                 },
                 "city": {
-                    "en": dict_raw["city"]
+                    "en": raw_data["city"] if db_format else dict_raw["city"]
                 },
                 "organization": {
-                    "AS": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else "",
-                    "name": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else ""
+                    "AS": raw_data["ASN"] if db_format else dict_raw["org"].split(maxsplit=1)[0][2:] if
+                    len(dict_raw["org"]) != 0 else "",
+                    "name": raw_data["organization"] if db_format else dict_raw["org"].split(maxsplit=1)[1] if
+                    len(dict_raw["org"]) != 0 else ""
                 }
             },
-            "ISODATE": datetime.now().isoformat()
+            "ISODATE": raw_data["API_req_ts"] if db_format else datetime.now().isoformat()
         }
 
         return enriched
@@ -294,50 +296,95 @@ def retrieve():
                     return current_conn
 
 
+def db_mgr(operation, content):
+    try:
+        db = config()["influxdb"]
+
+        config()["influxdb"]["db_pwd"] = config()["influxdb"]["db_pwd"]\
+            .replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+
+        clear_pwd = config.unveil(config()["influxdb"]["db_pwd"])
+        db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
+
+        if operation == "query":
+            units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
+            unit, value = config()['timedelta'].split('=')
+            if value.isdigit() and unit in units:
+                ret_time = value + units[unit]
+            else:
+                raise Exception("Timedelta conversion error")
+
+            formula = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{content}' 
+            ORDER BY time DESC LIMIT 1"""
+
+            return db_client.query(formula)
+
+        elif operation == "insert":
+            db_client.write_points(content)
+    except Exception as err:
+        print("In function: db_mgr()")
+        print("Database connection manager error: ", err)
+        sys.exit()
+
+
 def log_way():
     """
     Use logfile as data container - for use with promtail.
     :return:
     """
-    ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
-    if not os.path.exists(ips.file):
-        ips.save()
-    else:
-        ips.load()
-        for ip_address, values in ips().items():
-            if not isinstance(values, list):
-                ips.dispose(ip_address)
+    db_as_temp = config()["influxdb"]["active"]
+    ips = None
+
+    if not db_as_temp:
+        ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
+        if not os.path.exists(ips.file):
+            ips.save()
+        else:
+            ips.load()
+            for ip_address, values in ips().items():    # removing old tempfile format data
+                if not isinstance(values, list):
+                    ips.dispose(ip_address)
 
     if not os.path.exists(config()['logfile']):
         subprocess.run(["touch", f"{config()['logfile']}"])
 
     while True:
-
         conf_change()
-
+        ipt_data = retrieve()
         to_delete = []
         unit, value = config()["timedelta"].split("=")
 
-        for ip, ts in ips().items():
-            if (datetime.now() - datetime.strptime(ts[0], '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
-                to_delete.append(ip)
+        if not db_as_temp:
+            for ip, ts in ips().items():
+                if (datetime.now() - datetime.strptime(ts[0], '%Y-%m-%d %H:%M:%S')) > timedelta(**{unit: int(value)}):
+                    to_delete.append(ip)
 
-        for ip in to_delete:
-            ips.dispose(ip)
+            for ip in to_delete:
+                ips.dispose(ip)
 
-        ipt_data = retrieve()
         if ipt_data:
             src = ipt_data['SRC']
-            if src not in list(ips()):
-                req = api_req(src)
-                ips.create(src, [datetime.now().strftime('%Y-%m-%d %H:%M:%S'), req])
-                ips.save()
-                raw = req
+            if db_as_temp:
+                latest_data = list(db_mgr("query", src).get_points())[0]
+                if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], '%Y-%m-%d %H:%M:%S'))\
+                        > timedelta(**{unit: int(value)}):
+                    req = api_req(src)
+                    db_mgr("insert", enrich(req, ipt_data, True, False))
+                    raw = req
+                else:
+                    db_mgr("insert", enrich(latest_data, ipt_data, True, True))
+                    raw = latest_data
             else:
-                raw = ips()[src][1]
+                if src not in list(ips()):
+                    req = api_req(src)
+                    ips.create(src, [datetime.now().strftime('%Y-%m-%d %H:%M:%S'), req])
+                    ips.save()
+                    raw = req
+                else:
+                    raw = ips()[src][1]
 
             with open(config()['logfile'], "a") as log:
-                json.dump(enrich(raw, ipt_data), log, separators=(",", ":"))
+                json.dump(enrich(raw, ipt_data, False, True), log, separators=(",", ":"))
                 log.write("\n")
 
 
@@ -346,61 +393,32 @@ def db_way():
     Use InfluxDB database as data container.
     :return:
     """
-    def db_write(fresh=False):
-        """
-        Depending on data source, write to db either freshly requested geodata or already existing with new timestamp.
-        :param fresh: boolean -> comparing time difference between now, api request timestamp and timedelta from config.
-        :return:
-        """
-        if fresh:
-            db_client.write_points(enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
-        else:
-            db_client.write_points(enrich(newest_data, ipt_data, True, True))
-
     while True:
         try:
             conf_change()
 
-            db = config()["influxdb"]
-
-            config()["influxdb"]["db_pwd"] = config()["influxdb"]["db_pwd"]\
-                .replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
-
-            clear_pwd = config.unveil(config()["influxdb"]["db_pwd"])
-            db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
-
-            units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
-            unit, value = config()['timedelta'].split('=')
-            if value.isdigit() and unit in units:
-                ret_time = value + units[unit]
-            else:
-                raise Exception("Timedelta conversion error")
-
             ipt_data = retrieve()
-
-            query = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{ipt_data["SRC"]}' 
-ORDER BY time DESC LIMIT 1"""
-
             if ipt_data:
-                db_query = db_client.query(query)
+                db_query = db_mgr("query", ipt_data["SRC"])
 
                 if len(list(db_query)) == 0:
-                    db_write(True)  # if query result is empty, write to fresh data to DB
+                    # if query result is empty, write to fresh data to DB
+                    db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
                 else:
                     rewrite = False
-                    newest_data = list(db_query.get_points())[0]
-                    if (datetime.now() - datetime.strptime(newest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f")
+                    latest_data = list(db_query.get_points())[0]
+                    unit, value = config()['timedelta'].split('=')
+                    if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f")
                             < timedelta(**{unit: int(value)})):
                         rewrite = True
                     if rewrite:
-                        db_write()
+                        db_mgr("insert", enrich(latest_data, ipt_data, True, True))
                     else:
-                        db_write(True)
+                        db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
 
         except Exception as err:
             print("In function: db_way()")
-            print("Error connecting to database:")
-            print(err)
+            print("Data comparer error: ", err)
             sys.exit()
 
 
@@ -420,6 +438,7 @@ if not os.path.exists(config.file):
 
     config.create("logfile", logfile)
     config.create("temp", temp)
+    config.create("use_db_only", True)
     config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
     config.create("timedelta", "hours=72")
     config.create("excluded_IP", ["127.0.0.0/8", "0.0.0.0"])
@@ -441,7 +460,7 @@ else:
         config.save()
         mod_time(True)
 
-    if config()["influxdb"]["active"]:
+    if config()["use_db_only"]:
         db_way()
     else:
         log_way()
