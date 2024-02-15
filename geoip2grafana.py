@@ -93,12 +93,10 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                     else:
                         fields_rw[key] = val
                 fields_rw.pop("time")   # since "time" is not defined in config as tag, it will be put into "fields"
-                if "SRC" in list(fields_rw):
-                    fields_rw.pop("SRC")
 
                 enriched_rw = [
                     {
-                        "measurement": target["SRC"],
+                        "measurement": measurement,
                         "fields": fields_rw,
                         "tags": tags_rw
                     }
@@ -134,14 +132,11 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                         else:                           # if tag is unknown, raise error
                             raise Exception("Unknown InfluxDB tag {}".format(tag))
 
-                if "SRC" in list(fields):
-                    fields.pop("SRC")
-
                 fields.update(dict_all)
 
                 enriched = [
                     {
-                        "measurement": target["SRC"],
+                        "measurement": measurement,
                         "tags": tags,
                         "fields": fields
                     }
@@ -375,7 +370,7 @@ def db_way():
 
             ipt_data = retrieve()
 
-            query = f"""SELECT * FROM "{ipt_data["SRC"]}" WHERE time > now() - {ret_time} ORDER BY time DESC LIMIT 1"""
+            query = f"""SELECT * FROM "{measurement}" WHERE time > now() - {ret_time} ORDER BY time DESC LIMIT 1"""
 
             if ipt_data:
                 db_query = db_client.query(query)
@@ -406,6 +401,7 @@ p = select.poll()
 p.register(f.stdout)
 hostname = socket.gethostname()
 json_mod_time = None
+measurement = "all"
 
 config = Conson(cfile="geoip2grafana_config.json")
 if not os.path.exists(config.file):
