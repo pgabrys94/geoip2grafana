@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 def api_req(src):
     try:
         if config()['token'] == "ipInfoToken":
-            raise Exception("API token not changed")
+            raise Exception("API token not changed")    # DO POPRAWKI, NIE WYKRYWA
         api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}").text[1:-1].strip().split("\n")
         if "unknown token" in api_query:
             raise Exception("Invalid API token")
@@ -96,7 +96,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
 
                 enriched_rw = [
                     {
-                        "measurement": measurement,
+                        "measurement": hostname,
                         "fields": fields_rw,
                         "tags": tags_rw
                     }
@@ -136,7 +136,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
 
                 enriched = [
                     {
-                        "measurement": measurement,
+                        "measurement": hostname,
                         "tags": tags,
                         "fields": fields
                     }
@@ -370,7 +370,8 @@ def db_way():
 
             ipt_data = retrieve()
 
-            query = f"""SELECT * FROM "{measurement}" WHERE time > now() - {ret_time} ORDER BY time DESC LIMIT 1"""
+            query = f"""SELECT * FROM "{hostname}" WHERE time > now() - {ret_time} AND "SRC"='{ipt_data["SRC"]}' 
+ORDER BY time DESC LIMIT 1"""
 
             if ipt_data:
                 db_query = db_client.query(query)
@@ -401,7 +402,6 @@ p = select.poll()
 p.register(f.stdout)
 hostname = socket.gethostname()
 json_mod_time = None
-measurement = "all"
 
 config = Conson(cfile="geoip2grafana_config.json")
 if not os.path.exists(config.file):
@@ -418,7 +418,7 @@ if not os.path.exists(config.file):
     config.create("token", token)
     config.create("influxdb", {"active": False, "db_IP": "localhost", "db_port": 8086, "db_user": "USERNAME",
                                "db_pwd": "PASSWORD", "db_name": "geoip2grafana"})
-    config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_ts", "country"])
+    config.create("influxdb_tags", ["hostname", "DST", "API_req_ts"])
     config.save()
 
     print("Please update your info in config file.")
