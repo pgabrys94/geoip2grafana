@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 def api_req(src):
     try:
         if config()['token'] == "ipInfoToken":
-            raise Exception("API token not changed")    # DO POPRAWKI, NIE WYKRYWA
+            raise Exception("API token not changed")
         api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}").text[1:-1].strip().split("\n")
         if "unknown token" in api_query:
             raise Exception("Invalid API token")
@@ -93,10 +93,12 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                     else:
                         fields_rw[key] = val
                 fields_rw.pop("time")   # since "time" is not defined in config as tag, it will be put into "fields"
+                if "SRC" in list(fields_rw):
+                    fields_rw.pop("SRC")
 
                 enriched_rw = [
                     {
-                        "measurement": hostname,
+                        "measurement": target["SRC"],
                         "fields": fields_rw,
                         "tags": tags_rw
                     }
@@ -132,11 +134,14 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                         else:                           # if tag is unknown, raise error
                             raise Exception("Unknown InfluxDB tag {}".format(tag))
 
+                if "SRC" in list(fields):
+                    fields.pop("SRC")
+
                 fields.update(dict_all)
 
                 enriched = [
                     {
-                        "measurement": hostname,
+                        "measurement": target["SRC"],
                         "tags": tags,
                         "fields": fields
                     }
@@ -370,8 +375,7 @@ def db_way():
 
             ipt_data = retrieve()
 
-            query = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{ipt_data["SRC"]}' 
-ORDER BY time DESC LIMIT 1"""
+            query = f"""SELECT * FROM "{ipt_data["SRC"]}" WHERE time > now() - {ret_time} ORDER BY time DESC LIMIT 1"""
 
             if ipt_data:
                 db_query = db_client.query(query)
@@ -418,7 +422,7 @@ if not os.path.exists(config.file):
     config.create("token", token)
     config.create("influxdb", {"active": False, "db_IP": "localhost", "db_port": 8086, "db_user": "USERNAME",
                                "db_pwd": "PASSWORD", "db_name": "geoip2grafana"})
-    config.create("influxdb_tags", ["hostname", "DST", "API_req_ts"])
+    config.create("influxdb_tags", ["hostname", "DPT", "PROTO", "API_req_ts", "country"])
     config.save()
 
     print("Please update your info in config file.")
