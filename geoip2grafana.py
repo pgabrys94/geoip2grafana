@@ -356,7 +356,8 @@ def log_way():
 
         if not db_as_temp:
             for ip, ts in ips().items():
-                if (datetime.now() - datetime.strptime(ts[0], '"%Y-%m-%dT%H:%M:%S.%f"')) > timedelta(**{unit: int(value)}):
+                if ((datetime.now() - datetime.strptime(ts[0], '"%Y-%m-%dT%H:%M:%S.%f"'))
+                        > timedelta(**{unit: int(value)})):
                     to_delete.append(ip)
 
             for ip in to_delete:
@@ -365,15 +366,21 @@ def log_way():
         if ipt_data:
             src = ipt_data['SRC']
             if db_as_temp:
-                latest_data = list(db_mgr("query", src).get_points())[0]
-                if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f"))\
-                        > timedelta(**{unit: int(value)}):
+                db_query = db_mgr("query", src)
+                if len(list(db_query)) == 0:
                     req = api_req(src)
                     db_mgr("insert", enrich(req, ipt_data, True, False))
                     raw = req
                 else:
-                    db_mgr("insert", enrich(latest_data, ipt_data, True, True))
-                    raw = latest_data
+                    latest_data = list(db_query.get_points())[0]
+                    if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f"))\
+                            > timedelta(**{unit: int(value)}):
+                        req = api_req(src)
+                        db_mgr("insert", enrich(req, ipt_data, True, False))
+                        raw = req
+                    else:
+                        db_mgr("insert", enrich(latest_data, ipt_data, True, True))
+                        raw = latest_data
             else:
                 if src not in list(ips()):
                     req = api_req(src)
