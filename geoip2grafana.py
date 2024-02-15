@@ -370,7 +370,7 @@ def db_way():
 
             ipt_data = retrieve()
 
-            query = f"""SELECT * FROM "/.*/" WHERE time > now() - {ret_time} AND "SRC"='{ipt_data["SRC"]}' 
+            query = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{ipt_data["SRC"]}' 
 ORDER BY time DESC LIMIT 1"""
 
             if ipt_data:
