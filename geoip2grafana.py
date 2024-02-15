@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.0
+# geoip2grafana by Pawel Gabrys, version 2.3
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -17,14 +17,22 @@ from datetime import datetime, timedelta
 
 
 def api_req(src):
+    """
+    Querying IP geolocation API
+    :param src: IP address to query
+    :return: string -> API answer
+    """
     try:
-        if config()['token'] == "ipInfoToken":
+        if config()['token'].lower == "ipinfotoken":
             raise Exception("API token not changed")
-        api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}").text[1:-1].strip().split("\n")
-        if "unknown token" in api_query:
-            raise Exception("Invalid API token")
         else:
-            return api_query
+            api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}")
+
+            if str(api_query.status_code) != "200":
+                raise Exception("API query error. Check your token")
+            else:
+                return api_query.text[1:-1].strip().split("\n")
+
     except Exception as err:
         print("In function: api_req()")
         print(err)
