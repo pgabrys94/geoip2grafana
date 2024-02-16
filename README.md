@@ -11,7 +11,7 @@ Usage:
     nohup python3 geoip2grafana.py &
 (or you can create .service file)
 
-VERSION < 2.0:
+VERSION 2.6:
 
 Now you can use InfluxDB database to store your geolocation data. Compatible with version 1.* of database.
 You need to set database related parameters in configuration file:
