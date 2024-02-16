@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.3
+# geoip2grafana by Pawel Gabrys, version 2.5
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -54,36 +54,50 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         Enriching for logfile.
         :return: dictionary
         """
-        enriched = {
-            "ipt": ipt,
-            "geoip": {
-                "location": {
-                    "time_zone": raw_data["time_zone"] if db_format else dict_raw["timezone"],
-                    "latitude": raw_data["latitude"] if db_format else dict_raw["loc"].split(",")[0],
-                    "longitude": raw_data["longitude"] if db_format else dict_raw["loc"].split(",")[1],
-                    "geohash": raw_data["geohash"] if db_format else gh
+        try:
+            enriched = {
+                "ipt": ipt,
+                "geoip": {
+                    "location": {
+                        "time_zone": raw_data["time_zone"] if db_format or raw_from_db
+                        else dict_raw["timezone"],
+                        "latitude": raw_data["latitude"] if db_format or raw_from_db
+                        else dict_raw["loc"].split(",")[0],
+                        "longitude": raw_data["longitude"] if db_format or raw_from_db
+                        else dict_raw["loc"].split(",")[1],
+                        "geohash": raw_data["geohash"] if db_format or raw_from_db else gh
 
-                },
-                "country": {
-                    "names": {
-                        "en": raw_data["country"] if db_format else country
                     },
-                    "iso_code": raw_data["iso_code"] if db_format else dict_raw["country"]
+                    "country": {
+                        "names": {
+                            "en": raw_data["country"] if db_format or raw_from_db
+                            else country
+                        },
+                        "iso_code": raw_data["iso_code"] if db_format or raw_from_db
+                        else dict_raw["country"]
+                    },
+                    "city": {
+                        "en": raw_data["city"] if db_format or raw_from_db
+                        else dict_raw["city"]
+                    },
+                    "organization": {
+                        "AS": raw_data["ASN"] if db_format or raw_from_db
+                        else dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else "",
+                        "name": raw_data["organization"] if db_format or raw_from_db
+                        else dict_raw["org"].split(maxsplit=1)[1] if
+                        len(dict_raw["org"]) != 0 else ""
+                    }
                 },
-                "city": {
-                    "en": raw_data["city"] if db_format else dict_raw["city"]
-                },
-                "organization": {
-                    "AS": raw_data["ASN"] if db_format else dict_raw["org"].split(maxsplit=1)[0][2:] if
-                    len(dict_raw["org"]) != 0 else "",
-                    "name": raw_data["organization"] if db_format else dict_raw["org"].split(maxsplit=1)[1] if
-                    len(dict_raw["org"]) != 0 else ""
-                }
-            },
-            "ISODATE": raw_data["API_req_ts"] if db_format else datetime.now().isoformat()
-        }
+                "ISODATE": raw_data["API_req_ts"] if db_format or raw_from_db
+                else datetime.now().isoformat()
+            }
 
-        return enriched
+            return enriched
+
+        except Exception as e:
+            print("In function: enrich_for_log()")
+            print("Data enriching error: ", e)
+            breakpoint()
 
     def enrich_for_db():
         """
@@ -157,24 +171,25 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         except Exception as e:
             print("In function: enrich_for_db()")
             print(e)
-            sys.exit()
 
     try:
         dict_raw = {}
+        raw_from_db = False
 
-        if from_db:
+        if from_db and db_format:
             return enrich_for_db()
         else:
-            for info in raw_data:
-                info = info.replace('"', "").strip(",").split(":")
-                dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
-
-        # acquire country name from ISO code
-        country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
-            .replace("'", "").split("name=")[1].split(",")[0]
-
-        # create geohash from latitude and longitude
-        gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
+            if not isinstance(raw_data, dict):
+                for info in raw_data:
+                    info = info.replace('"', "").strip(",").split(":")
+                    dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
+                # acquire country name from ISO code
+                country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
+                    .replace("'", "").split("name=")[1].split(",")[0]
+                # create geohash from latitude and longitude
+                gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
+            else:
+                raw_from_db = True
 
         ipt = {}
         for v in config()["to_collect"]:
@@ -197,6 +212,11 @@ def mod_time(up=False):
 
 
 def tag_pwd():
+    """
+    Reformats password hashed string from "hash" to "<hash>".
+    Tags are used to validate password format.
+    :return:
+    """
     config.veil("influxdb", "db_pwd")
     config()["influxdb"]["db_pwd"] = "<" + config()["influxdb"]["db_pwd"] + ">"
 
@@ -297,6 +317,12 @@ def retrieve():
 
 
 def db_mgr(operation, content):
+    """
+    Function for database operations.
+    :param operation: string -> "query" or "insert"
+    :param content: string -> for "query": source IP address; for "insert": data in line protocol format
+    :return:
+    """
     try:
         db = config()["influxdb"]
 
@@ -332,67 +358,92 @@ def log_way():
     Use logfile as data container - for use with promtail.
     :return:
     """
-    db_as_temp = config()["influxdb"]["active"]
-    ips = None
+    def log_write(data):
+        """
+        Write provided data to logfile.
+        :param data: either data from database or API
+        :return:
+        """
+        try:
+            if db_as_temp:
+                with open(config()['logfile'], "a") as log:
+                    json.dump(enrich(data, ipt_data, False, True), log, separators=(",", ":"))
+                    log.write("\n")
+            else:
+                with open(config()['logfile'], "a") as log:
+                    json.dump(enrich(data, ipt_data, False, False), log, separators=(",", ":"))
+                    log.write("\n")
 
-    if not db_as_temp:
-        ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
-        if not os.path.exists(ips.file):
-            ips.save()
-        else:
-            ips.load()
-            for ip_address, values in ips().items():    # removing old tempfile format data
-                if not isinstance(values, list):
-                    ips.dispose(ip_address)
+        except Exception as e:
+            print("In function: log_write()")
+            print("Error writing to logfile: ", e)
 
-    if not os.path.exists(config()['logfile']):
-        subprocess.run(["touch", f"{config()['logfile']}"])
 
-    while True:
-        conf_change()
-        ipt_data = retrieve()
-        to_delete = []
-        unit, value = config()["timedelta"].split("=")
+    try:
+        db_as_temp = config()["influxdb"]["active"]
+        ips = None
 
         if not db_as_temp:
-            for ip, ts in ips().items():
-                if ((datetime.now() - datetime.strptime(ts[0], '"%Y-%m-%dT%H:%M:%S.%f"'))
-                        > timedelta(**{unit: int(value)})):
-                    to_delete.append(ip)
+            ips = Conson(cfilepath=config()["temp"].rsplit("/", 1)[0], cfile=config()["temp"].rsplit("/", 1)[1])
+            if not os.path.exists(ips.file):
+                ips.save()
+            else:
+                ips.load()
+                for ip_address, values in ips().items():    # removing old tempfile format data
+                    if not isinstance(values, list):
+                        ips.dispose(ip_address)
 
-            for ip in to_delete:
-                ips.dispose(ip)
+        if not os.path.exists(config()['logfile']):
+            subprocess.run(["touch", f"{config()['logfile']}"])
 
-        if ipt_data:
-            src = ipt_data['SRC']
-            if db_as_temp:
-                db_query = db_mgr("query", src)
-                if len(list(db_query)) == 0:
-                    req = api_req(src)
-                    db_mgr("insert", enrich(req, ipt_data, True, False))
-                    raw = req
-                else:
-                    latest_data = list(db_query.get_points())[0]
-                    if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f"))\
-                            > timedelta(**{unit: int(value)}):
+        while True:
+            conf_change()
+            ipt_data = retrieve()
+            to_delete = []
+            unit, value = config()["timedelta"].split("=")
+
+            if not db_as_temp:
+                for ip, ts in ips().items():
+                    if ((datetime.now() - datetime.strptime(ts[0], '"%Y-%m-%dT%H:%M:%S.%f"'))
+                            > timedelta(**{unit: int(value)})):
+                        to_delete.append(ip)
+
+                for ip in to_delete:
+                    ips.dispose(ip)
+
+            if ipt_data:
+                src = ipt_data['SRC']
+                if db_as_temp:
+                    db_query = db_mgr("query", src)
+                    if len(list(db_query)) == 0:
                         req = api_req(src)
                         db_mgr("insert", enrich(req, ipt_data, True, False))
                         raw = req
                     else:
-                        db_mgr("insert", enrich(latest_data, ipt_data, True, True))
-                        raw = latest_data
-            else:
-                if src not in list(ips()):
-                    req = api_req(src)
-                    ips.create(src, [datetime.now().isoformat(), req])
-                    ips.save()
-                    raw = req
+                        latest_data = list(db_query.get_points())[0]
+                        if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f"))\
+                                > timedelta(**{unit: int(value)}):
+                            req = api_req(src)
+                            db_mgr("insert", enrich(req, ipt_data, True, False))
+                            raw = req
+                        else:
+                            db_mgr("insert", enrich(latest_data, ipt_data, True, True))
+                            raw = latest_data
                 else:
-                    raw = ips()[src][1]
+                    if src not in list(ips()):
+                        req = api_req(src)
+                        ips.create(src, [datetime.now().isoformat(), req])
+                        ips.save()
+                        raw = req
+                    else:
+                        raw = ips()[src][1]
+                log_write(raw)
 
-            with open(config()['logfile'], "a") as log:
-                json.dump(enrich(raw, ipt_data, False, True), log, separators=(",", ":"))
-                log.write("\n")
+    except Exception as err:
+        print("In function: log_way()")
+        print("Database connection manager error: ", err)
+        breakpoint()
+        sys.exit()
 
 
 def db_way():
@@ -412,13 +463,10 @@ def db_way():
                     # if query result is empty, write to fresh data to DB
                     db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
                 else:
-                    rewrite = False
                     latest_data = list(db_query.get_points())[0]
                     unit, value = config()['timedelta'].split('=')
                     if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f")
                             < timedelta(**{unit: int(value)})):
-                        rewrite = True
-                    if rewrite:
                         db_mgr("insert", enrich(latest_data, ipt_data, True, True))
                     else:
                         db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
