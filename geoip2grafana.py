@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.5
+# geoip2grafana by Pawel Gabrys, version 2.6
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -11,6 +11,7 @@ import json
 import sys
 import ipaddress
 import socket
+import time
 from influxdb import InfluxDBClient
 from conson import Conson
 from datetime import datetime, timedelta
@@ -22,16 +23,27 @@ def api_req(src):
     :param src: IP address to query
     :return: string -> API answer
     """
+
     try:
         if config()['token'].lower == "ipinfotoken":
             raise Exception("API token not changed")
         else:
-            api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}")
+            base_retry_seconds = 5
+            while True:
+                try:
+                    api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}")
 
-            if str(api_query.status_code) != "200":
-                raise Exception("API query error. Check your token")
-            else:
-                return api_query.text[1:-1].strip().split("\n")
+                    if str(api_query.status_code) != "200":
+                        raise Exception("API query error. Check your token")
+                    else:
+                        return api_query.text[1:-1].strip().split("\n")
+
+                except requests.ConnectionError as err:
+                    print("Connection error: ", err)
+                    print(f"Retrying in: {base_retry_seconds} seconds...")
+                    time.sleep(base_retry_seconds)
+                    base_retry_seconds = base_retry_seconds * 2
+
 
     except Exception as err:
         print("In function: api_req()")
