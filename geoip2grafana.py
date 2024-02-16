@@ -505,7 +505,7 @@ if not os.path.exists(config.file):
 
     config.create("logfile", logfile)
     config.create("temp", temp)
-    config.create("use_db_only", True)
+    config.create("use_db_only", False)
     config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
     config.create("timedelta", "hours=72")
     config.create("excluded_IP", ["127.0.0.0/8", "0.0.0.0"])

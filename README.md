@@ -11,18 +11,20 @@ Usage:
     nohup python3 geoip2grafana.py &
 (or you can create .service file)
 
-VERSION 2.0:
+VERSION < 2.0:
 
 Now you can use InfluxDB database to store your geolocation data. Compatible with version 1.* of database.
 You need to set database related parameters in configuration file:
-
+    
+    "use_db_only": false,   # -> true
+    (...)
     "influxdb": {
-        "active": false,
-        "db_IP": "localhost",
-        "db_port": 8086,
-        "db_user": "USERNAME",
-        "db_pwd": "PASSWORD",
-        "db_name": "geoip2grafana"
+        "active": false,    # -> true
+        "db_IP": "localhost",   # -> database IP address
+        "db_port": 8086,   # -> database port
+        "db_user": "USERNAME",   # ->username for user with granted ALL (but not admin!)
+        "db_pwd": "PASSWORD",   # ->password (will be encrypted when program runs)
+        "db_name": "geoip2grafana"   # -> database name
     },
 
 Next, you can set what you want to store as tag. Everything else will be considered as field. You can choose from:
@@ -40,6 +42,19 @@ Next, you can set what you want to store as tag. Everything else will be conside
         "ASN" - autonomous system number.
 
 Additionally, you can use any of iptables items, provided you collected them from journal first.
+
+Also, you can use InfluxDB instead of tempfile.
+
+    "use_db_only": false,   # -> false
+    (...)
+    "influxdb": {
+        "active": false,    # -> true
+        ...
+        }
+
+Data format for Log will not change, so both modes are cross-compatible. Program will query database for source IP from
+all measurements (hosts in this case),compare with timedelta in config and either request fresh geolocation data 
+and write to both database and logfile, or just write existng data to logfile and rewrite them to database.
 
 You can set paths to log directory and tempfile directory in geoip2grafana_config.json file. 
 You HAVE TO add your own ipinfo.io token to this config.
@@ -100,4 +115,5 @@ Promtail job:
     "DST" - destination IP
     "DPT" - destination port
     
-  You can freely add in config file whatever you want to pass to grafana from iptables log. Just remember to put it in promtail job config label.
+  You can freely add in config file whatever you want to pass to grafana from iptables log. Just remember to put it in 
+  promtail job config label.
