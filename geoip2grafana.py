@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.6
+# geoip2grafana by Pawel Gabrys, version 2.7
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -333,32 +333,45 @@ def db_mgr(operation, content):
     Function for database operations.
     :param operation: string -> "query" or "insert"
     :param content: string -> for "query": source IP address; for "insert": data in line protocol format
-    :return:
+    :return: "query" -> ResultSet object; "insert" -> None
     """
     try:
-        db = config()["influxdb"]
 
-        config()["influxdb"]["db_pwd"] = config()["influxdb"]["db_pwd"]\
-            .replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
+        base_retry_seconds = 5
 
-        clear_pwd = config.unveil(config()["influxdb"]["db_pwd"])
-        db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
+        while True:
+            try:
+                db = config()["influxdb"]
 
-        if operation == "query":
-            units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
-            unit, value = config()['timedelta'].split('=')
-            if value.isdigit() and unit in units:
-                ret_time = value + units[unit]
-            else:
-                raise Exception("Timedelta conversion error")
+                config()["influxdb"]["db_pwd"] = config()["influxdb"]["db_pwd"]\
+                    .replace("<", "", 1)[::-1].replace(">", "", 1)[::-1]
 
-            formula = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{content}' 
-            ORDER BY time DESC LIMIT 1"""
+                clear_pwd = config.unveil(config()["influxdb"]["db_pwd"])
+                db_client = InfluxDBClient(db["db_IP"], db["db_port"], db["db_user"], clear_pwd, db["db_name"])
 
-            return db_client.query(formula)
+                if operation == "query":
+                    units = {"minutes": "m", "hours": "h", "days": "d", "weeks": "w"}
+                    unit, value = config()['timedelta'].split('=')
+                    if value.isdigit() and unit in units:
+                        ret_time = value + units[unit]
+                    else:
+                        raise Exception("Timedelta conversion error")
 
-        elif operation == "insert":
-            db_client.write_points(content)
+                    formula = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{content}' 
+                    ORDER BY time DESC LIMIT 1"""
+
+                    return db_client.query(formula)
+
+                elif operation == "insert":
+                    db_client.write_points(content)
+                    return
+
+            except requests.ConnectionError as err:
+                print("Database connection error: ", err)
+                print(f"Retrying in: {base_retry_seconds} seconds...")
+                time.sleep(base_retry_seconds)
+                base_retry_seconds = base_retry_seconds * 2
+
     except Exception as err:
         print("In function: db_mgr()")
         print("Database connection manager error: ", err)
