@@ -38,12 +38,11 @@ def api_req(src):
                     else:
                         return api_query.text[1:-1].strip().split("\n")
 
-                except requests.ConnectionError as err:
+                except Exception as err:
                     print("Connection error: ", err)
                     print(f"Retrying in: {base_retry_seconds} seconds...")
                     time.sleep(base_retry_seconds)
                     base_retry_seconds = base_retry_seconds * 2
-
 
     except Exception as err:
         print("In function: api_req()")
@@ -109,7 +108,6 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         except Exception as e:
             print("In function: enrich_for_log()")
             print("Data enriching error: ", e)
-            breakpoint()
 
     def enrich_for_db():
         """
@@ -238,16 +236,15 @@ def conf_change():
     Function looking for changes in configuration file.
     :return:
     """
-    current_mod_time = os.path.getmtime(os.path.join(os.getcwd(), "geoip2grafana_config.json"))
-    reported_mod_time = mod_time()
-    if current_mod_time > reported_mod_time:
+    pwd_changed = False
+    if mod_time() != json_mod_time:
         try:
             test = Conson(cfile="geoip2grafana_config.json")
             test.load()
 
             time_values = ['minutes', 'hours', 'days', 'weeks']
             if test() == config():
-                pass
+                return
             elif test()["timedelta"].split("=")[0] not in time_values:
                 raise Exception("Invalid timedelta. Must be 'minutes', 'hours', 'days' or 'weeks'.")
             elif len(test()["influxdb"]) == 0 or not isinstance(test()["influxdb"], dict):
@@ -260,13 +257,16 @@ def conf_change():
                                 print(f"INFO: {original_subkey}: {str(original_subvalue).strip()} >>> "
                                       f"{str(test()[original_key][original_subkey])}")
                                 if original_subkey == "db_pwd":
-                                    tag_pwd()
+                                    pwd_changed = True
+
                     else:
                         if original_value != test()[original_key]:
                             print(f"INFO: {original_key}: {str(original_value).strip()} >>> {test()[original_key]}")
                 print("\n")
                 mod_time(True)
                 config.load()
+                if pwd_changed:
+                    tag_pwd()
 
         except Exception as err:
             print("In function: conf_change()")
@@ -336,7 +336,7 @@ def db_mgr(operation, content):
     :return: "query" -> ResultSet object; "insert" -> None
     """
     try:
-
+        print("Trying {}:".format(operation))
         base_retry_seconds = 5
 
         while True:
@@ -360,7 +360,9 @@ def db_mgr(operation, content):
                     formula = f"""SELECT * FROM /.*/ WHERE time > now() - {ret_time} AND "SRC"='{content}' 
                     ORDER BY time DESC LIMIT 1"""
 
-                    return db_client.query(formula)
+                    answer = db_client.query(formula)
+                    print("Answer: ", answer)
+                    return answer
 
                 elif operation == "insert":
                     db_client.write_points(content)
@@ -467,7 +469,6 @@ def log_way():
     except Exception as err:
         print("In function: log_way()")
         print("Database connection manager error: ", err)
-        breakpoint()
         sys.exit()
 
 
