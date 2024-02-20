@@ -478,28 +478,35 @@ def db_way():
     :return:
     """
     while True:
+        latest_data = None
+        mode = None
+
         try:
             conf_change()
 
             ipt_data = retrieve()
             if ipt_data:
-                db_query = db_mgr("query", ipt_data["SRC"])
+                mode = "query"
+                db_query = db_mgr(mode, ipt_data["SRC"])
 
+                mode = "insert"
                 if len(list(db_query)) == 0:
                     # if query result is empty, write to fresh data to DB
-                    db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
+                    db_mgr(mode, enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
                 else:
                     latest_data = list(db_query.get_points())[0]
                     unit, value = config()['timedelta'].split('=')
                     if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f")
                             < timedelta(**{unit: int(value)})):
-                        db_mgr("insert", enrich(latest_data, ipt_data, True, True))
+                        db_mgr(mode, enrich(latest_data, ipt_data, True, True))
                     else:
-                        db_mgr("insert", enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
+                        db_mgr(mode, enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
 
         except Exception as err:
             print("In function: db_way()")
             print("Data comparer error: ", err)
+            print("Operation: ", mode)
+            print("Latest data: ", latest_data)
             sys.exit()
 
 
