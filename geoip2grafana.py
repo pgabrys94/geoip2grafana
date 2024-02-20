@@ -336,7 +336,6 @@ def db_mgr(operation, content):
     :return: "query" -> ResultSet object; "insert" -> None
     """
     try:
-        print("Trying {}:".format(operation))
         base_retry_seconds = 5
 
         while True:
@@ -361,7 +360,6 @@ def db_mgr(operation, content):
                     ORDER BY time DESC LIMIT 1"""
 
                     answer = db_client.query(formula)
-                    print("Answer: ", answer)
                     return answer
 
                 elif operation == "insert":
@@ -369,6 +367,7 @@ def db_mgr(operation, content):
                     return
 
             except requests.ConnectionError as err:
+                print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 print("Database connection error: ", err)
                 print(f"Retrying in: {base_retry_seconds} seconds...")
                 time.sleep(base_retry_seconds)
@@ -503,6 +502,7 @@ def db_way():
                         db_mgr(mode, enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
 
         except Exception as err:
+            print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print("In function: db_way()")
             print("Data comparer error: ", err)
             print("Operation: ", mode)
