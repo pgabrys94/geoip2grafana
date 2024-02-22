@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.7
+# geoip2grafana by Pawel Gabrys, version 2.8
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -149,8 +149,10 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                     "geohash": gh,
                     "iso_code": dict_raw["country"],
                     "city": dict_raw["city"],
-                    "organization": dict_raw["org"].split(maxsplit=1)[1] if len(dict_raw["org"]) != 0 else "",
-                    "ASN": dict_raw["org"].split(maxsplit=1)[0][2:] if len(dict_raw["org"]) != 0 else ""
+                    "organization": dict_raw["org"].split(maxsplit=1)[1] if "org" in list(dict_raw)
+                                                                            and len(dict_raw["org"]) != 0 else "n/d",
+                    "ASN": dict_raw["org"].split(maxsplit=1)[0][2:] if "org" in list(dict_raw)
+                                                                       and len(dict_raw["org"]) != 0 else "n/d"
 
                 }
                 tags = {}
@@ -180,6 +182,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
 
         except Exception as e:
             print("In function: enrich_for_db()")
+            print("For content ", "not " if from_db else "", "from db")
             print(e)
 
     try:
@@ -375,6 +378,7 @@ def db_mgr(operation, content):
 
     except Exception as err:
         print("In function: db_mgr()")
+        print("On operation: ", operation, "with content type: ", type(content))
         print("Database connection manager error: ", err)
         sys.exit()
 
