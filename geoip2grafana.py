@@ -135,6 +135,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                     else:
                         fields_rw[key] = val
                 fields_rw.pop("time")   # since "time" is not defined in config as tag, it will be put into "fields"
+                tags_rw["hostname"] = hostname
 
                 enriched_rw = [
                     {
@@ -566,6 +567,7 @@ if not os.path.exists(config.file):
 
     config.create("max_workers", 30)
     config.create("logfile", logfile)
+    
     config.create("temp", temp)
     config.create("use_db_only", False)
     config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
