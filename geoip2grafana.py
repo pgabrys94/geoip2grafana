@@ -1,4 +1,4 @@
-# geoip2grafana by Pawel Gabrys, version 2.9
+# geoip2grafana by Pawel Gabrys, version 2.10
 # http://github.com/pawelgabrys/geoip2grafana
 
 import subprocess
@@ -12,7 +12,6 @@ import sys
 import ipaddress
 import socket
 import time
-import multiprocessing
 from influxdb import InfluxDBClient
 from conson import Conson
 from datetime import datetime, timedelta
@@ -26,20 +25,16 @@ def api_req(src):
     """
 
     try:
-        if config()['token'].lower() == "ipinfotoken":
+        if config()['token'].lower == "ipinfotoken":
             raise Exception("API token not changed")
         else:
             base_retry_seconds = 5
-            retry_threshold_hours = 4
             while True:
                 try:
                     api_query = requests.get(f"https://ipinfo.io/{src}?token={config()['token']}")
 
                     if str(api_query.status_code) != "200":
-                        if str(api_query.status_code) == "429":
-                            raise Exception("Query limit exceeded.")
-                        else:
-                            raise Exception("API query error. Check your token")
+                        raise Exception("API query error. Check your token")
                     else:
                         return api_query.text[1:-1].strip().split("\n")
 
@@ -48,8 +43,6 @@ def api_req(src):
                     print(f"Retrying in: {base_retry_seconds} seconds...")
                     time.sleep(base_retry_seconds)
                     base_retry_seconds = base_retry_seconds * 2
-                    if (base_retry_seconds / 60 / 60) > retry_threshold_hours:
-                        raise Exception(err)
 
     except Exception as err:
         print("In function: api_req()")
@@ -116,7 +109,6 @@ def enrich(raw_data, target, db_format=False, from_db=False):
             print("In function: enrich_for_log()")
             print("Data enriching error: ", e)
 
-
     def enrich_for_db():
         """
         Enriching for database insertion.
@@ -135,7 +127,6 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                     else:
                         fields_rw[key] = val
                 fields_rw.pop("time")   # since "time" is not defined in config as tag, it will be put into "fields"
-                tags_rw["hostname"] = hostname
 
                 enriched_rw = [
                     {
@@ -202,22 +193,14 @@ def enrich(raw_data, target, db_format=False, from_db=False):
             return enrich_for_db()
         else:
             if not isinstance(raw_data, dict):
-                try:
-                    for info in raw_data:
-                        info = info.replace('"', "").strip(",").split(":")
-                        dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
-                    # acquire country name from ISO code
-                    country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
-                        .replace("'", "").split("name=")[1].split(",")[0]
-                    # create geohash from latitude and longitude
-                    gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
-                except Exception as err:
-                    print("In function: enrich()")
-                    print("when raw_data is not a dict:")
-                    print("Error: ", err)
-                    print("\nRAW DATA BELOW\n")
-                    print(raw_data)
-
+                for info in raw_data:
+                    info = info.replace('"', "").strip(",").split(":")
+                    dict_raw[info[0].strip()] = info[1].strip() if len(info[1].strip()) != 0 else ""
+                # acquire country name from ISO code
+                country = str(pycountry.countries.get(alpha_2=dict_raw["country"]))\
+                    .replace("'", "").split("name=")[1].split(",")[0]
+                # create geohash from latitude and longitude
+                gh = geohash2.encode(float(dict_raw["loc"].split(",")[0]), float(dict_raw["loc"].split(",")[1]), 7)
             else:
                 raw_from_db = True
 
@@ -400,7 +383,7 @@ def db_mgr(operation, content):
         sys.exit()
 
 
-def log_way(ipt_data):
+def log_way():
     """
     Use logfile as data container - for use with promtail.
     :return:
@@ -445,6 +428,7 @@ def log_way(ipt_data):
 
         while True:
             conf_change()
+            ipt_data = retrieve()
             to_delete = []
             unit, value = config()["timedelta"].split("=")
 
@@ -491,7 +475,7 @@ def log_way(ipt_data):
         sys.exit()
 
 
-def db_way(ipt_data):
+def db_way():
     """
     Use InfluxDB database as data container.
     :return:
@@ -503,6 +487,7 @@ def db_way(ipt_data):
         try:
             conf_change()
 
+            ipt_data = retrieve()
             if ipt_data:
                 mode = "query"
                 db_query = db_mgr(mode, ipt_data["SRC"])
@@ -529,28 +514,6 @@ def db_way(ipt_data):
             sys.exit()
 
 
-def worker(data):
-    """
-    Worker function for multiprocessing.
-    :param data: str -> journal iptables entry
-    :return:
-    """
-    global p
-    global hostname
-    global json_mod_time
-    global config
-    global workers
-
-    try:
-        workers += 1
-        if config()["use_db_only"]:
-            db_way(data)
-        else:
-            log_way(data)
-    finally:
-        workers -= 1
-
-
 args = ['journalctl', '--lines', '0', '--follow', '--grep', '[iptables]']
 f = subprocess.Popen(args, stdout=subprocess.PIPE)
 p = select.poll()
@@ -565,9 +528,7 @@ if not os.path.exists(config.file):
     temp = os.path.join(r"/tmp/", "geoip2grafana.temp")
     token = "ipinfoToken"
 
-    config.create("max_workers", 30)
     config.create("logfile", logfile)
-    
     config.create("temp", temp)
     config.create("use_db_only", False)
     config.create("to_collect", "IN", "SRC", "OUT", "SPT", "PROTO", "DST", "DPT")
@@ -591,18 +552,7 @@ else:
         config.save()
         mod_time(True)
 
-    workers_max = config()["max_workers"]
-    workers = 0
-
-    try:
-        while True:
-            if workers > workers_max:
-                raise Exception("Max workers exceeded")
-            else:
-                journal_ipt_entry = retrieve()
-                if journal_ipt_entry:
-                    process = multiprocessing.Process(target=worker, args=(journal_ipt_entry, ))
-                    process.start()
-    except Exception as main_error:
-        print("In main function:")
-        print("Error: ", main_error)
+    if config()["use_db_only"]:
+        db_way()
+    else:
+        log_way()
