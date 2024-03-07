@@ -25,7 +25,7 @@ def api_req(src):
     """
 
     try:
-        if config()['token'].lower == "ipinfotoken":
+        if config()['token'].lower() == "ipinfotoken":
             raise Exception("API token not changed")
         else:
             base_retry_seconds = 5
@@ -43,6 +43,7 @@ def api_req(src):
                     print(f"Retrying in: {base_retry_seconds} seconds...")
                     time.sleep(base_retry_seconds)
                     base_retry_seconds = base_retry_seconds * 2
+                    continue
 
     except Exception as err:
         print("In function: api_req()")
@@ -447,6 +448,8 @@ def log_way():
                     db_query = db_mgr("query", src)
                     if len(list(db_query)) == 0:
                         req = api_req(src)
+                        if type(req) is None:
+                            continue
                         db_mgr("insert", enrich(req, ipt_data, True, False))
                         raw = req
                     else:
@@ -454,6 +457,8 @@ def log_way():
                         if (datetime.now() - datetime.strptime(latest_data["API_req_ts"], "%Y-%m-%dT%H:%M:%S.%f"))\
                                 > timedelta(**{unit: int(value)}):
                             req = api_req(src)
+                            if type(req) is None:
+                                continue
                             db_mgr("insert", enrich(req, ipt_data, True, False))
                             raw = req
                         else:
@@ -462,6 +467,8 @@ def log_way():
                 else:
                     if src not in list(ips()):
                         req = api_req(src)
+                        if type(req) is None:
+                            continue
                         ips.create(src, [datetime.now().isoformat(), req])
                         ips.save()
                         raw = req
@@ -495,7 +502,10 @@ def db_way():
                 mode = "insert"
                 if len(list(db_query)) == 0:
                     # if query result is empty, write to fresh data to DB
-                    db_mgr(mode, enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
+                    req = api_req(ipt_data["SRC"])
+                    if type(req) is None:
+                        continue
+                    db_mgr(mode, enrich(req, ipt_data, True, False))
                 else:
                     latest_data = list(db_query.get_points())[0]
                     unit, value = config()['timedelta'].split('=')
@@ -503,7 +513,10 @@ def db_way():
                             < timedelta(**{unit: int(value)})):
                         db_mgr(mode, enrich(latest_data, ipt_data, True, True))
                     else:
-                        db_mgr(mode, enrich(api_req(ipt_data["SRC"]), ipt_data, True, False))
+                        req = api_req(ipt_data["SRC"])
+                        if type(req) is None:
+                            continue
+                        db_mgr(mode, enrich(req, ipt_data, True, False))
 
         except Exception as err:
             print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
