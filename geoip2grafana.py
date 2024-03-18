@@ -188,6 +188,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
             print("For content ", "not " if from_db else "", "from db")
             print(e)
 
+
     try:
         dict_raw = {}
         raw_from_db = False
@@ -310,8 +311,9 @@ def excluded(ip_net_list, address):
 def retrieve():
     """
     Read iptables log entry from journal and pass them for enrichment.
-    :return:
+    :return: dictionary
     """
+    global host_ip
     current_conn = {}
 
     while True:
@@ -329,6 +331,8 @@ def retrieve():
                 for item in config()["to_collect"]:
                     if item not in list(current_conn):
                         current_conn[item] = ""
+
+                host_ip = current_conn["DST"]
 
                 if not excluded(config()["excluded_IP"], current_conn["SRC"]):
                     return current_conn
@@ -433,7 +437,6 @@ def log_way():
         while True:
             conf_change()
             ipt_data = retrieve()
-            host_ip = ipt_data["DST"]
             to_delete = []
             unit, value = config()["timedelta"].split("=")
 
@@ -500,7 +503,7 @@ def db_way():
             conf_change()
 
             ipt_data = retrieve()
-            host_ip = ipt_data["DST"]
+            print("db_way, ipt_data", ipt_data["DST"])
             if ipt_data:
                 mode = "query"
                 db_query = db_mgr(mode, ipt_data["SRC"])
