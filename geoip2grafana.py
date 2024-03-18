@@ -124,7 +124,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                         if key == "hostname":
                             tags_rw["hostname"] = hostname
                         elif key == "DST":
-                            tags_rw["DST"] = ipt["DST"]
+                            tags_rw["DST"] = host_ip
                         else:
                             tags_rw[key] = val
                     else:
@@ -397,6 +397,7 @@ def log_way():
         :param data: either data from database or API
         :return:
         """
+        global host_ip
         try:
             if db_as_temp:
                 with open(config()['logfile'], "a") as log:
@@ -432,6 +433,7 @@ def log_way():
         while True:
             conf_change()
             ipt_data = retrieve()
+            host_ip = ipt_data["DST"]
             to_delete = []
             unit, value = config()["timedelta"].split("=")
 
@@ -489,6 +491,7 @@ def db_way():
     Use InfluxDB database as data container.
     :return:
     """
+    global host_ip
     while True:
         latest_data = None
         mode = None
@@ -497,6 +500,7 @@ def db_way():
             conf_change()
 
             ipt_data = retrieve()
+            host_ip = ipt_data["DST"]
             if ipt_data:
                 mode = "query"
                 db_query = db_mgr(mode, ipt_data["SRC"])
