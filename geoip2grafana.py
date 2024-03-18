@@ -115,7 +115,6 @@ def enrich(raw_data, target, db_format=False, from_db=False):
         Enriching for database insertion.
         :return: list -> compatible with database line protocol format
         """
-        global host_ip
         try:
             if from_db:
                 fields_rw = {}
@@ -125,7 +124,7 @@ def enrich(raw_data, target, db_format=False, from_db=False):
                         if key == "hostname":
                             tags_rw["hostname"] = hostname
                         elif key == "DST":
-                            tags_rw["DST"] = host_ip
+                            tags_rw["DST"] = ipt["DST"]
                         else:
                             tags_rw[key] = val
                     else:
@@ -490,7 +489,6 @@ def db_way():
     Use InfluxDB database as data container.
     :return:
     """
-    global host_ip
     while True:
         latest_data = None
         mode = None
@@ -518,7 +516,6 @@ def db_way():
                         db_mgr(mode, enrich(latest_data, ipt_data, True, True))
                     else:
                         req = api_req(ipt_data["SRC"])
-                        host_ip = ipt_data["DST"]
                         if type(req) is None:
                             continue
                         db_mgr(mode, enrich(req, ipt_data, True, False))
