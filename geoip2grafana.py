@@ -296,14 +296,14 @@ def excluded(ip_net_list, address):
 
     for addr in ip_net_list:
         xnets.append(addr) if "/" in addr else xips.append(addr)
-
     if address in xips:
         return True
     else:
+        ipaddr = ipaddress.ip_address(address)
         for network in xnets:
             net = ipaddress.ip_network(network, strict=False)
-            ipaddr = ipaddress.ip_address(address)
-            if ipaddr in net:
+            chk = ipaddr in net
+            if chk:
                 return True
     return False
 
@@ -333,8 +333,9 @@ def retrieve():
                         current_conn[item] = ""
 
                 host_ip = current_conn["DST"]
+                excl = excluded(config()["excluded_IP"], current_conn["SRC"])
 
-                if not excluded(config()["excluded_IP"], current_conn["SRC"]):
+                if not excl:
                     return current_conn
 
 
