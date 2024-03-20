@@ -503,7 +503,6 @@ def db_way():
             conf_change()
 
             ipt_data = retrieve()
-            print("db_way, ipt_data", ipt_data["DST"])
             if ipt_data:
                 mode = "query"
                 db_query = db_mgr(mode, ipt_data["SRC"])
